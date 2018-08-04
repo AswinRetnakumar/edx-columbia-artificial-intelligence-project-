@@ -1,21 +1,36 @@
 import sys
 from collections import deque
 import resource
+try:
+    import Queue as Q
+except ImportError:
+    import queue as Q
+   
 
 class State():
-
-    def __init__(self, boardip,parent = None):
+    
+    def __init__(self, boardip,parent = None, priorityi = 1):
         #argv returns a string so conv it into int for evaluation
         self.board_vals = boardip #in string
         self.board = map(lambda x: int(x), boardip.split(',')) # string to list conv, spliting using intermediate commas
         self.parent = parent
-                
-        if parent is None:
+        self.priority = priorityi
+                     
+        if self.parent is None:
             self.depth = 0
+            
         else:
             self.depth = parent.depth+1 # increases depth as a child is created from a separate parent in next level, 
-                                        # this line ensures that depth increases only when a new level is created since siblings in 
+                                       # this line ensures that depth increases only when a new level is created since siblings in 
                                         # same level have 1 parent  
+  
+    def __cmp__(self, other): # for priority queue, specifies object component that is used for prioritising.
+        
+        if other is not None: # for initial state there is no other object
+            return cmp(self.priority, other.priority)
+        else:
+            return cmp(self.priority,0)
+
 class Solver():
     # deque is a special type of list which can both function as queue and stack
     def __init__(self,init_state,method):
@@ -30,6 +45,11 @@ class Solver():
             self.bfs_sol()
         elif self.method == "dfs":
             self.dfs_sol()
+        elif self.method == "ast":
+            self.ast_sol()
+        else:
+            print("Type correct search method")
+       
 
     def bfs_sol(self):
         frontier = deque()
@@ -84,7 +104,35 @@ class Solver():
                     frontier_dict[child.board_vals] = 0
                     #print("\n Child:",i," State:",child.board_vals)
     
+    def ast_sol(self):
+        # uses prioirity queue 
+        frontier = Q.PriorityQueue()
+        frontier.put(self.init)
+        frontier_dict = {self.init.board_vals:0}
+        explored_dict = {}
         
+        while not frontier.empty():
+            present = frontier.get()
+            explored_dict[present.board_vals] = 0
+            del frontier_dict[present.board_vals]
+            
+            if Board.is_goal(present):
+                self.goalstate = present
+                return
+            
+            #print("Node expanded:",self.nodeexpanded,"\n")
+           
+            self.nodeexpanded += 1
+            for child in Board.children_ast(present):
+                if self.maxdepth < child.depth:
+                    self.maxdepth = child.depth
+                
+                if child.board_vals not in frontier_dict and child.board_vals not in explored_dict:
+                    frontier.put(child)
+                    frontier_dict[child.board_vals] = 0
+        
+        
+    
     def result(self):
         path = []
         current = self.goalstate
@@ -142,7 +190,7 @@ class Board():
     def swap_pos_udlr(self,state):
         zero_pos= Board.zeros(state)
         #table stores swap position for each zero position in udlr order
-        swap_lookup_table = {0: [1, 3], 1: [4, 0, 2], 2: [5, 1], 3: [0, 6, 4],
+        swap_lookup_table = {0: [3,1], 1: [4, 0, 2], 2: [5, 1], 3: [0, 6, 4],
                              4: [1, 7, 3, 5], 5: [2, 8, 4], 6: [3, 7], 7: [4, 6, 8], 8: [5, 7]
                              }
 
@@ -166,6 +214,32 @@ class Board():
     @classmethod
     def children_rldu(self,state):
         return self.children_udlr(state)[::-1]# for dfs it should swap in rldu , so reverse list obtained from chilred udlr
+    @classmethod
+    def manhattandist(self, state):
+         dist = 0
+         for pos,ele in enumerate(state):
+            vertical = (pos/3) - (ele/3)
+            hori = (pos%3) - (ele%3)
+            vertical = (-1)*vertical if vertical< 0 else vertical
+            hori = (-1)*hori if hori< 0 else hori
+            dist += vertical + hori
+         return dist 
+    @classmethod
+    def children_ast(self,state):
+        z= Board.zeros(state)
+        swap_pts = self.swap_pos_udlr(state)
+        children = []
+
+        for pts in swap_pts:
+            new = state.board[:]
+            new[z] = state.board[pts]
+            new[pts] = 0
+            dist = self.manhattandist(new)
+            new = map(lambda x: str(x), new)#conv to string
+            new = ",".join(new)
+            children.append(State(new,state,dist))#add new state with parent
+        return children
+    
 
 
 
@@ -177,15 +251,3 @@ if __name__ == "__main__":
     g = Solver(s,method) #solver instace created , each solver istance contains vars of state which can be used with object of Solver 
     g.methodsel()
     g.result()
-
-
-
-
-
-
-
-
-
-
-
-
